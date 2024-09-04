@@ -1,0 +1,16 @@
+{
+    "name": "kensa-port-forwarder-server",
+    "version": "1.0.0",
+    "main": "dist/server.js",
+    "scripts": {
+        "start": "tsc && node .",
+        "build": "tsc"
+    },
+    "author": "Kensa",
+    "license": "MIT",
+    "packageManager": "yarn@4.4.1",
+    "devDependencies": {
+        "@types/node": "^22.5.3",
+        "typescript": "^5.5.4"
+    }
+}
