@@ -6,11 +6,14 @@ import { ChildProcess, spawn, execSync, spawnSync } from 'child_process';
 import fs from 'fs';
 import path from 'path';
 
-const SSHD = ['/usr/bin/sshd', '/bin/sshd'].find(f => fs.existsSync(f));
-if (!SSHD) {
-    console.error('no sshd found');
+let SSHD = '';
+try {
+    SSHD = execSync('which sshd').toString();
+} catch {
+    console.log('no sshd found');
     process.exit(1);
 }
+
 const SERVER_PORT = parseInt(process.env.SERVER_PORT ?? '7856');
 const FORWARDING_USER = process.env.FORWARDING_USER;
 const OPENED_PORTS = (process.env.OPENED_PORTS ?? '')
