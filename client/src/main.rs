@@ -3,7 +3,15 @@ use dialoguer::theme::ColorfulTheme;
 use directories::{ProjectDirs, UserDirs};
 use serde::{Deserialize, Serialize};
 use ssh_key::{PrivateKey, PublicKey};
-use std::{fs, io::Write, net::TcpStream, path::PathBuf, process};
+use std::{
+    cell::RefCell,
+    fs,
+    io::Write,
+    net::TcpStream,
+    path::PathBuf,
+    process::{self, Stdio},
+    rc::Rc,
+};
 use tungstenite::{self, stream::MaybeTlsStream, Message, WebSocket};
 use url::Url;
 use uuid::Uuid;
@@ -229,16 +237,14 @@ fn main() {
                 port_blacklist,
                 ClientType::Sender,
             ) {
-                Ok(_) => {
-                    println!("registered !");
-                }
+                Ok(_) => {}
                 Err(err) => {
                     eprintln!("{}", err);
                     process::exit(1);
                 }
             }
 
-            let mut running_tunnel: Option<process::Child> = None;
+            let running_tunnel: Rc<RefCell<Option<process::Child>>> = Rc::new(RefCell::new(None));
             loop {
                 let message = socket_receive(&mut socket);
                 println!("{:?}", message);
@@ -273,7 +279,10 @@ fn main() {
                             eprintln!("the client type received with the tunnel connect message does not match the client, this is a bug with the server");
                             process::exit(1);
                         }
-                        let mut ssh_process = process::Command::new("ssh")
+                        let ssh_process = process::Command::new("ssh")
+                            .arg("-o")
+                            .arg("StrictHostKeyChecking=no")
+                            .arg("-N")
                             .arg("-p")
                             .arg(sshd_port.to_string())
                             .arg("-i")
@@ -281,17 +290,23 @@ fn main() {
                             .arg("-R")
                             .arg(format!("{}:localhost:{}", local_port, forwarded_port))
                             .arg(format!("{}@{}", user, get_server_domain(&server_url)))
+                            .stderr(Stdio::null())
+                            .stdout(Stdio::null())
                             .spawn()
                             .expect("failed to open ssh tunnel");
-                        running_tunnel.as_mut().replace(&mut ssh_process);
+                        running_tunnel.borrow_mut().replace(ssh_process);
                     }
-                    WSMessage::TunnelClose {} if running_tunnel.is_some() => {
-                        running_tunnel
-                            .as_mut()
-                            .take()
-                            .unwrap()
-                            .kill()
-                            .expect("failed to kill tunnel");
+                    WSMessage::TunnelClose {} => {
+                        if running_tunnel.borrow().is_some() {
+                            println!("killing tunnel");
+                            running_tunnel
+                                .borrow_mut()
+                                .take()
+                                .unwrap()
+                                .kill()
+                                .expect("failed to kill tunnel");
+                            process::exit(0)
+                        }
                     }
                     _ => {}
                 }
@@ -317,9 +332,7 @@ fn main() {
                 port_blacklist,
                 ClientType::Receiver,
             ) {
-                Ok(_) => {
-                    println!("registered !");
-                }
+                Ok(_) => {}
                 Err(err) => {
                     eprintln!("{}", err);
                     process::exit(1);
@@ -335,7 +348,7 @@ fn main() {
             };
             socket_send(&mut socket, message);
 
-            let mut running_tunnel: Option<process::Child> = None;
+            let running_tunnel: Rc<RefCell<Option<process::Child>>> = Rc::new(RefCell::new(None));
             loop {
                 let message = socket_receive(&mut socket);
                 println!("{:?}", message);
@@ -344,25 +357,6 @@ fn main() {
                         eprintln!("error: {}:\n{}", target, error.unwrap());
                         process::exit(1);
                     }
-                    WSMessage::ConnectConfirm {
-                        source_client,
-                        port,
-                    } => {
-                        let result = dialoguer::Confirm::with_theme(&ColorfulTheme::default())
-                            .with_prompt(format!(
-                                "Client {} wants to connect to port {}",
-                                source_client, port
-                            ))
-                            .default(true)
-                            .interact()
-                            .unwrap();
-
-                        if result {
-                            socket_send(&mut socket, WSMessage::ConnectAccept {});
-                        } else {
-                            socket_send(&mut socket, WSMessage::ConnectDeny {});
-                        }
-                    }
                     WSMessage::TunnelConnect {
                         client_type,
                         user,
@@ -370,11 +364,14 @@ fn main() {
                         local_port,
                         ..
                     } => {
-                        if client_type != ClientType::Sender {
+                        if client_type != ClientType::Receiver {
                             eprintln!("the client type received with the tunnel connect message does not match the client, this is a bug with the server");
                             process::exit(1);
                         }
-                        let mut ssh_process = process::Command::new("ssh")
+                        let ssh_process = process::Command::new("ssh")
+                            .arg("-o")
+                            .arg("StrictHostKeyChecking=no")
+                            .arg("-N")
                             .arg("-p")
                             .arg(sshd_port.to_string())
                             .arg("-i")
@@ -382,18 +379,23 @@ fn main() {
                             .arg("-L")
                             .arg(format!("{}:localhost:{}", args.local_port, local_port))
                             .arg(format!("{}@{}", user, get_server_domain(&server_url)))
+                            // .stderr(Stdio::null())
+                            // .stdout(Stdio::null())
                             .spawn()
                             .expect("failed to open ssh tunnel");
-                        running_tunnel.as_mut().replace(&mut ssh_process);
+                        running_tunnel.borrow_mut().replace(ssh_process);
                     }
-                    WSMessage::TunnelClose {} if running_tunnel.is_some() => {
-                        running_tunnel
-                            .as_mut()
-                            .take()
-                            .unwrap()
-                            .kill()
-                            .expect("failed to kill tunnel");
-                        process::exit(0)
+                    WSMessage::TunnelClose {} => {
+                        if running_tunnel.borrow().is_some() {
+                            println!("killing tunnel");
+                            running_tunnel
+                                .borrow_mut()
+                                .take()
+                                .unwrap()
+                                .kill()
+                                .expect("failed to kill tunnel");
+                            process::exit(0)
+                        }
                     }
                     _ => {}
                 }
@@ -484,7 +486,14 @@ fn socket_register(
 }
 
 fn socket_receive(socket: &mut Socket) -> WSMessage {
-    let msg = socket.read().expect("failed to read message from server");
+    let msg = socket.read();
+    let msg = match msg {
+        Ok(msg) => msg,
+        Err(_) => {
+            eprintln!("an error occurred while reading from socket");
+            process::exit(1);
+        }
+    };
     let msg = msg.into_text().expect("failed to convert message to text");
 
     let msg: WSMessage =

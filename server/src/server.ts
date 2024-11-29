@@ -3,15 +3,51 @@ import ws from 'ws';
 import { ZodError } from 'zod';
 import { ClientType, messagesSchema } from './schema';
 import { ChildProcess, spawn, execSync, spawnSync } from 'child_process';
+import fs from 'fs';
+import path from 'path';
+import os from 'os';
 
 const SERVER_PORT = parseInt(process.env.SERVER_PORT ?? '7856');
 const FORWARDING_USER = process.env.FORWARDING_USER;
 const OPENED_PORTS = (process.env.OPENED_PORTS ?? '')
     .split(',')
-    .map(e => e.split(' '))
-    .flat()
-    .map(parseInt)
+    .map(e => parseInt(e))
     .filter(e => !isNaN(e));
+
+const KEYS_FOLDER = process.env.KEYS_FOLDER ?? 'keys';
+const KEYS = ['ssh_host_rsa_key', 'ssh_host_ecdsa_key', 'ssh_host_ed25519_key'].map(key =>
+    path.resolve(KEYS_FOLDER, key)
+);
+if (!fs.existsSync(KEYS_FOLDER)) {
+    fs.mkdirSync(KEYS_FOLDER);
+}
+
+const tmp_folder = path.join('/tmp', 'authorized_keys');
+if (!fs.existsSync(tmp_folder)) {
+    fs.mkdirSync(tmp_folder);
+    fs.chmodSync(tmp_folder, '700');
+}
+
+for (const key of KEYS) {
+    if (!fs.existsSync(key)) {
+        const keyType = path.parse(key).name.split('_').at(-2)!;
+        const args = ['-t', keyType];
+        if (keyType == 'rsa') {
+            args.push('-b');
+            args.push('4096');
+        }
+        if (keyType == 'ecsda') {
+            args.push('-b');
+            args.push('521');
+        }
+        args.push('-f');
+        args.push(key);
+        // args.push('-N');
+        // args.push('""');
+        spawnSync('ssh-keygen', args);
+        console.log('generated', key);
+    }
+}
 
 if (!FORWARDING_USER) {
     console.error('please specify the FORWARDING_USER env variable');
@@ -26,7 +62,7 @@ if (!FORWARDING_USER) {
 
 if (OPENED_PORTS.length === 0) {
     console.error(
-        'please set the OPENED_PORTS env variable to contain a list (comma or space separated) of opened port for the sshd instances'
+        'please set the OPENED_PORTS env variable to contain a list (comma separated) of opened port for the sshd instances'
     );
     process.exit(1);
 }
@@ -114,22 +150,33 @@ wss.on('connection', ws => {
                     }
                 }
 
-                function createConnection() {
-                    let sshdPort = OPENED_PORTS.find(port => connections.every(con => con.sshdPort != port));
+                async function createConnection() {
+                    let sshdPort = OPENED_PORTS.find(port => !connections.some(con => con.sshdPort === port));
+                    console.log(OPENED_PORTS);
                     if (!sshdPort) {
                         // no port available
                         wsSendResponse(ws, false, 'Server is full');
                         return;
                     }
 
-                    const localPort = 7391;
-
+                    let localPort = Math.max(...OPENED_PORTS) + 1;
+                    while (connections.some(con => con.localPort === localPort)) localPort++;
+                    // const authorizedKeyArgs = '';
                     const authorizedKeyArgs = `command="echo 'This account is restricted to port forwarding'",no-pty,no-agent-forwarding,no-X11-forwarding`;
                     const sshKeys = [targetClient.ssh_key, sourceClient!.ssh_key]
                         .map(key => authorizedKeyArgs + ' ' + key)
                         .join('\n');
 
+                    const authorizedKeyFile = path.resolve(tmp_folder, `authorized_keys_${sshdPort}`);
+                    if (fs.existsSync(authorizedKeyFile)) {
+                        fs.rmSync(authorizedKeyFile);
+                    }
+                    fs.writeFileSync(authorizedKeyFile, `#!/bin/sh\n/bin/echo "${sshKeys}"`);
+                    // fs.chmodSync(authorizedKeyFile, 700);
+
                     const sshdArgs: string[] = [
+                        '-f',
+                        '/dev/null',
                         '-o',
                         `AllowUsers=${FORWARDING_USER}`,
                         '-o',
@@ -150,25 +197,29 @@ wss.on('connection', ws => {
                         'AllowAgentForwarding=no',
                         '-o',
                         `Port=${sshdPort}`,
-                        '-o',
-                        `MaxSessions=0`,
+                        // '-o',
+                        // `MaxSessions=2`,
                         '-o',
                         `PermitOpen=localhost:${localPort}`,
                         '-o',
-                        `AuthorizedKeysCommand=/bin/echo "${sshKeys}"`
+                        `AuthorizedKeysCommandUser=nobody`,
+                        '-o',
+                        `AuthorizedKeysCommand=${authorizedKeyFile}`,
+                        '-o',
+                        `HostKey=${KEYS[0]}`,
+                        '-o',
+                        `HostKey=${KEYS[1]}`,
+                        '-o',
+                        `HostKey=${KEYS[2]}`,
+                        '-D'
+                        // '-o',
+                        // 'MaxStartups=2'
                     ];
 
-                    const sshd = spawn('sshd', sshdArgs, {});
-                    sshd.stderr.on('data', data => {
-                        console.error(`[sshd ${sshdPort}]`, data);
-                    });
-                    sshd.stdout.on('data', data => {
-                        console.log(`[sshd ${sshdPort}]`, data);
-                    });
-                    sshd.stdout.on('close', () => {
-                        console.error(`[sshd ${sshdPort}] exited`);
-                        // TODO handle connection removal
-                    });
+                    console.log('/usr/bin/sshd ' + sshdArgs.join(' '));
+
+                    const sshd = spawn('/usr/bin/sshd', sshdArgs, {});
+                    await wait(1000);
                     let connection: Connection = {
                         sshd,
                         sender: targetClient,
@@ -232,6 +283,7 @@ wss.on('connection', ws => {
                     })
                 );
             } else {
+                console.log((err as Error).stack);
                 ws.send(
                     JSON.stringify({
                         type: 'response',
