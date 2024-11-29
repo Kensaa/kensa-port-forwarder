@@ -209,8 +209,6 @@ wss.on('connection', ws => {
                         'AllowAgentForwarding=no',
                         '-o',
                         `Port=${sshdPort}`,
-                        // '-o',
-                        // `MaxSessions=2`,
                         '-o',
                         `PermitOpen=localhost:${localPort}`,
                         '-o',
@@ -224,8 +222,6 @@ wss.on('connection', ws => {
                         '-o',
                         `HostKey=${KEYS[2]}`,
                         '-D'
-                        // '-o',
-                        // 'MaxStartups=2'
                     ];
 
                     const sshd = spawn(SSHD!, sshdArgs, {});

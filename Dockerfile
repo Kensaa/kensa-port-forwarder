@@ -20,9 +20,6 @@ ENV FORWARDING_USER="forward_user"
 ENV OPENED_PORTS="7857,7858,7859"
 
 RUN useradd forward_user
+RUN mkdir -p /run/sshd
 
 CMD ["node","dist/server.js"]
-
-
-
-#7856
