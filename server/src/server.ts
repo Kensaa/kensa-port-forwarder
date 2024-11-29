@@ -8,9 +8,14 @@ import path from 'path';
 
 let SSHD = '';
 try {
-    SSHD = execSync('which sshd').toString();
+    SSHD = execSync('which sshd').toString().trim();
 } catch {
     console.log('no sshd found');
+    process.exit(1);
+}
+
+if (!fs.existsSync(SSHD)) {
+    console.error('no sshd found');
     process.exit(1);
 }
 
