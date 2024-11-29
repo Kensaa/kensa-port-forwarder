@@ -3,26 +3,19 @@
     "version": "1.0.0",
     "main": "dist/server.js",
     "scripts": {
-        "start": "tsc && node .",
+        "start": "tsc && dotenv -- node .",
         "build": "tsc"
     },
     "author": "Kensa",
     "license": "MIT",
     "packageManager": "yarn@4.4.1",
     "devDependencies": {
-        "@types/cors": "^2.8.17",
-        "@types/express": "^4.17.21",
-        "@types/jsonwebtoken": "^9",
         "@types/node": "^22.5.3",
         "@types/ws": "^8.5.12",
         "dotenv-cli": "^7.4.2",
         "typescript": "^5.5.4"
     },
     "dependencies": {
-        "@kensaa/express-api-router": "^1.0.7",
-        "cors": "^2.8.5",
-        "express": "^4.19.2",
-        "jsonwebtoken": "^9.0.2",
         "ws": "^8.18.0",
         "zod": "^3.23.8"
     }
