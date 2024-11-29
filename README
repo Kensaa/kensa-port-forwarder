@@ -1,0 +1,7 @@
+# Kensa Port forwarded_port
+
+## Installation
+
+```
+cargo install --git https://github.com/Kensaa/kensa-port-forwarder
+```
