@@ -5,8 +5,11 @@ import { ClientType, messagesSchema } from './schema';
 import { ChildProcess, spawn, execSync, spawnSync } from 'child_process';
 import fs from 'fs';
 import path from 'path';
-import os from 'os';
 
+if (!fs.existsSync('/usr/bin/sshd')) {
+    console.error('failed to find sshd');
+    process.exit(1);
+}
 const SERVER_PORT = parseInt(process.env.SERVER_PORT ?? '7856');
 const FORWARDING_USER = process.env.FORWARDING_USER;
 const OPENED_PORTS = (process.env.OPENED_PORTS ?? '')

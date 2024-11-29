@@ -1,14 +1,16 @@
-FROM node:latest AS build_env
+FROM node:23-alpine AS build_env
 
 WORKDIR /app
 COPY server/package.json ./
+COPY ./server/.yarnrc.yml .
 RUN corepack enable
 RUN yarn
 COPY ./server/ .
 RUN yarn build
 RUN yarn workspaces focus --all --production
 
-FROM gcr.io/distroless/nodejs22-debian12
+FROM debian
+RUN apt update && apt install node
 COPY --from=build_env /app/ /app/
 WORKDIR /app/
 
@@ -19,7 +21,7 @@ ENV OPENED_PORTS="7857,7858,7859"
 
 RUN useradd forward_user
 
-CMD ["dist/server.js"]
+CMD ["node","dist/server.js"]
 
 
 
