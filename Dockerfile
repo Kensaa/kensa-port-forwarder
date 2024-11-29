@@ -10,7 +10,7 @@ RUN yarn build
 RUN yarn workspaces focus --all --production
 
 FROM debian
-RUN apt update && apt install node
+RUN apt update && apt install nodejs
 COPY --from=build_env /app/ /app/
 WORKDIR /app/
 
