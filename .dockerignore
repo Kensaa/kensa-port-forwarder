@@ -4,3 +4,4 @@ dist
 .env
 keys
 tmp
+yarn.lock

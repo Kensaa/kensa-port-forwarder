@@ -9,7 +9,7 @@ COPY ./server/ .
 RUN yarn build
 RUN yarn workspaces focus --all --production
 
-FROM debian
+FROM debian AS runner
 RUN apt update && apt install -y nodejs
 COPY --from=build_env /app/ /app/
 WORKDIR /app/
