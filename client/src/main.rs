@@ -19,7 +19,7 @@ use uuid::Uuid;
 #[cfg(debug_assertions)]
 const DEFAULT_SERVER_URL: &str = "localhost:7856";
 #[cfg(not(debug_assertions))]
-const DEFAULT_SERVER_URL: &str = "kensa.fr:7856";
+const DEFAULT_SERVER_URL: &str = "port.kensa.fr";
 
 #[derive(Parser, Debug)]
 #[command(name = "kensa port forwarder client")]
