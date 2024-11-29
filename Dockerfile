@@ -10,7 +10,7 @@ RUN yarn build
 RUN yarn workspaces focus --all --production
 
 FROM debian AS runner
-RUN apt update && apt install -y nodejs
+RUN apt update && apt install -y nodejs openssh-server
 COPY --from=build_env /app/ /app/
 WORKDIR /app/
 
