@@ -6,8 +6,9 @@ import { ChildProcess, spawn, execSync, spawnSync } from 'child_process';
 import fs from 'fs';
 import path from 'path';
 
-if (!fs.existsSync('/usr/bin/sshd')) {
-    console.error('failed to find sshd');
+const SSHD = ['/usr/bin/sshd', '/bin/sshd'].find(f => fs.existsSync(f));
+if (!SSHD) {
+    console.error('no sshd found');
     process.exit(1);
 }
 const SERVER_PORT = parseInt(process.env.SERVER_PORT ?? '7856');
@@ -219,9 +220,7 @@ wss.on('connection', ws => {
                         // 'MaxStartups=2'
                     ];
 
-                    console.log('/usr/bin/sshd ' + sshdArgs.join(' '));
-
-                    const sshd = spawn('/usr/bin/sshd', sshdArgs, {});
+                    const sshd = spawn(SSHD!, sshdArgs, {});
                     await wait(1000);
                     let connection: Connection = {
                         sshd,
