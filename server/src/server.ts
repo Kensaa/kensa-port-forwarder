@@ -34,12 +34,6 @@ if (!fs.existsSync(KEYS_FOLDER)) {
     fs.mkdirSync(KEYS_FOLDER);
 }
 
-const tmp_folder = path.join('/tmp', 'authorized_keys');
-if (!fs.existsSync(tmp_folder)) {
-    fs.mkdirSync(tmp_folder);
-    fs.chmodSync(tmp_folder, '700');
-}
-
 for (const key of KEYS) {
     if (!fs.existsSync(key)) {
         const keyType = path.parse(key).name.split('_').at(-2)!;
@@ -70,6 +64,12 @@ if (!FORWARDING_USER) {
         console.error(`user ${FORWARDING_USER} does not exists`);
         process.exit(1);
     }
+}
+
+const FORWARDING_USER_HOME = path.join('/home', FORWARDING_USER!);
+if (!fs.existsSync(FORWARDING_USER_HOME)) {
+    console.error(`cannot find home for "${FORWARDING_USER}" at "${FORWARDING_USER_HOME}"`);
+    process.exit(1);
 }
 
 if (OPENED_PORTS.length === 0) {
@@ -179,11 +179,16 @@ wss.on('connection', ws => {
                         .map(key => authorizedKeyArgs + ' ' + key)
                         .join('\n');
 
-                    const authorizedKeyFile = path.resolve(tmp_folder, `authorized_keys_${sshdPort}`);
+                    const sshFolder = path.resolve(FORWARDING_USER_HOME, '.ssh');
+                    if (!fs.existsSync(sshFolder)) {
+                        fs.mkdirSync(sshFolder);
+                    }
+                    const authorizedKeyFile = path.join(sshFolder, `authorized_keys_${sshdPort}`);
                     if (fs.existsSync(authorizedKeyFile)) {
                         fs.rmSync(authorizedKeyFile);
                     }
-                    fs.writeFileSync(authorizedKeyFile, `#!/bin/sh\n/bin/echo "${sshKeys}"`);
+                    // fs.writeFileSync(authorizedKeyFile, `#!/bin/sh\n/bin/echo "${sshKeys}"`);
+                    fs.writeFileSync(authorizedKeyFile, `${sshKeys}`);
                     // fs.chmodSync(authorizedKeyFile, 700);
 
                     const sshdArgs: string[] = [
@@ -211,10 +216,10 @@ wss.on('connection', ws => {
                         `Port=${sshdPort}`,
                         '-o',
                         `PermitOpen=localhost:${localPort}`,
+                        // '-o',
+                        // `AuthorizedKeysCommandUser=${FORWARDING_USER}`,
                         '-o',
-                        `AuthorizedKeysCommandUser=nobody`,
-                        '-o',
-                        `AuthorizedKeysCommand=${authorizedKeyFile}`,
+                        `AuthorizedKeysFile=${authorizedKeyFile}`,
                         '-o',
                         `HostKey=${KEYS[0]}`,
                         '-o',
