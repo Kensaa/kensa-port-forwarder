@@ -247,7 +247,6 @@ fn main() {
             let running_tunnel: Rc<RefCell<Option<process::Child>>> = Rc::new(RefCell::new(None));
             loop {
                 let message = socket_receive(&mut socket);
-                println!("{:?}", message);
                 match message {
                     WSMessage::ConnectConfirm {
                         source_client,
