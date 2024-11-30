@@ -290,8 +290,8 @@ fn main() {
                             .arg("-R")
                             .arg(format!("{}:localhost:{}", local_port, forwarded_port))
                             .arg(format!("{}@{}", user, get_server_domain(&server_url)))
-                            .stderr(Stdio::null())
-                            .stdout(Stdio::null())
+                            // .stderr(Stdio::null())
+                            // .stdout(Stdio::null())
                             .spawn()
                             .expect("failed to open ssh tunnel");
                         running_tunnel.borrow_mut().replace(ssh_process);
